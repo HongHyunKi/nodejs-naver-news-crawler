@@ -124,6 +124,9 @@ export async function crawlNaverFinanceNews({
     );
   }
 
+  // display 값 유효성 검사 및 제한
+  const validDisplay = Math.min(Math.max(1, parseInt(display) || 10), 100);
+
   // 네이버 금융 종목 뉴스 리스트 URL
   const newsListUrl = `https://finance.naver.com/item/news_news.naver?code=${stockCode}&page=${page}&sm=title_entity_id.basic&clusterId=`;
 
@@ -136,8 +139,6 @@ export async function crawlNaverFinanceNews({
     responseType: 'arraybuffer'
   });
 
-  console.log('response', response);
-
   // EUC-KR을 UTF-8로 변환
   const decodedData = iconv.decode(response.data, 'EUC-KR');
   const $ = cheerio.load(decodedData);
@@ -145,7 +146,7 @@ export async function crawlNaverFinanceNews({
 
   // 뉴스 기사 파싱
   $('.type5 tbody tr').each((index, element) => {
-    if (articles.length >= display) return false;
+    if (articles.length >= validDisplay) return false;
 
     const $row = $(element);
     const article = parseArticleRow($row, stockCode);
@@ -159,7 +160,7 @@ export async function crawlNaverFinanceNews({
     method: 'crawling',
     stockCode,
     page: parseInt(page),
-    display: parseInt(display),
+    display: validDisplay,
     totalCrawled: articles.length,
     articles,
     sourceUrl: newsListUrl,
