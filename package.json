@@ -8,10 +8,14 @@
     "dev": "nodemon index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "type": "module",
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "nodemon": "^3.1.11"
+    "axios": "^1.13.2",
+    "dotenv": "^17.2.3",
+    "nodemon": "^3.1.11",
+    "prettier": "^3.7.3"
   }
 }
