@@ -40,6 +40,8 @@ async function searchNaverNews(query, display = 10, start = 1, sort = 'sim') {
       }
     });
 
+    console.log('response', response);
+
     return {
       success: true,
       total: response.data.total,
