@@ -1,7 +1,10 @@
 import express from 'express';
 import axios from 'axios';
 import dotenv from 'dotenv';
-import { crawlNaverFinanceNews } from './utils/newsCrawler.js';
+import {
+  crawlNaverFinanceNews,
+  crawlNaverFinanceNewsDetail
+} from './utils/newsCrawler.js';
 
 dotenv.config();
 
@@ -30,10 +33,19 @@ app.get('/', (req, res) => {
         .tab-content.active { display: block; }
         form { margin: 20px 0; padding: 20px; background: #f5f5f5; border-radius: 8px; }
         input, select, button { padding: 10px; margin: 5px; font-size: 16px; }
+        input[type="text"] { width: 500px; }
         button[type="submit"] { background: #03C75A; color: white; border: none; cursor: pointer; border-radius: 4px; }
         button[type="submit"]:hover { background: #02b350; }
         .response { margin-top: 20px; }
-        pre { background: #f5f5f5; padding: 20px; border-radius: 8px; overflow-x: auto; }
+        pre { background: #f5f5f5; padding: 20px; border-radius: 8px; overflow-x: auto; max-height: 600px; }
+        .article-card { background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin: 10px 0; }
+        .article-card h4 { margin: 0 0 10px 0; color: #333; }
+        .article-card .meta { color: #666; font-size: 14px; margin: 5px 0; }
+        .article-card .content { color: #444; line-height: 1.6; margin: 10px 0; white-space: pre-wrap; }
+        .article-card .images { margin: 10px 0; }
+        .article-card .images img { max-width: 100%; height: auto; margin: 5px 0; border-radius: 4px; }
+        .test-btn { background: #0066cc; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-size: 14px; margin-left: 10px; }
+        .test-btn:hover { background: #0052a3; }
       </style>
     </head>
     <body>
@@ -42,6 +54,7 @@ app.get('/', (req, res) => {
       <div class="tabs">
         <button class="tab active" onclick="switchTab(event, 'api')">방법 1: 네이버 뉴스 API</button>
         <button class="tab" onclick="switchTab(event, 'crawling')">방법 2: 네이버 뉴스 크롤링</button>
+        <button class="tab" onclick="switchTab(event, 'detail')">뉴스 상세 크롤링</button>
       </div>
 
       <!-- 방법 1: API -->
@@ -74,12 +87,45 @@ app.get('/', (req, res) => {
         <div id="crawlingResponse" class="response"></div>
       </div>
 
+      <!-- 방법 3: News Detail Crawling -->
+      <div id="detail" class="tab-content">
+        <h2>네이버 금융 뉴스 상세 크롤링</h2>
+        <p>네이버 금융 뉴스의 상세 내용(본문, 이미지 등)을 크롤링합니다.</p>
+        <form id="detailForm">
+          <input type="text" id="detailUrl" placeholder="뉴스 URL 입력" value="https://finance.naver.com/item/news_read.naver?article_id=0006177016&office_id=018&code=005930" required>
+          <button type="submit">상세 크롤링</button>
+          <button type="button" class="test-btn" onclick="loadSampleUrl()">샘플 URL 로드</button>
+        </form>
+        <div id="detailResponse" class="response"></div>
+      </div>
+
       <script>
         function switchTab(e, tab) {
           document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
           document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
           e.target.classList.add('active');
           document.getElementById(tab).classList.add('active');
+        }
+
+        // 샘플 URL 로드
+        async function loadSampleUrl() {
+          const responseDiv = document.getElementById('detailResponse');
+          responseDiv.innerHTML = '<p>샘플 뉴스 목록을 가져오는 중...</p>';
+
+          try {
+            const response = await fetch('/api/crawl?query=005930&display=3&page=1');
+            const data = await response.json();
+
+            if (data.articles && data.articles.length > 0) {
+              const firstArticle = data.articles[0];
+              document.getElementById('detailUrl').value = firstArticle.origin_url;
+              responseDiv.innerHTML = '<p style="color: green;">샘플 URL이 로드되었습니다. "상세 크롤링" 버튼을 클릭하세요.</p>';
+            } else {
+              responseDiv.innerHTML = '<p style="color: red;">뉴스를 찾을 수 없습니다.</p>';
+            }
+          } catch (error) {
+            responseDiv.innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
+          }
         }
 
         // API 검색
@@ -117,6 +163,50 @@ app.get('/', (req, res) => {
             const data = await response.json();
 
             responseDiv.innerHTML = '<h3>Crawled Data:</h3><pre>' + JSON.stringify(data, null, 2) + '</pre>';
+          } catch (error) {
+            responseDiv.innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
+          }
+        });
+
+        // 상세 크롤링
+        document.getElementById('detailForm').addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const url = document.getElementById('detailUrl').value;
+
+          const responseDiv = document.getElementById('detailResponse');
+          responseDiv.innerHTML = '<p>상세 정보를 크롤링하는 중...</p>';
+
+          try {
+            const response = await fetch(\`/api/crawl/detail?url=\${encodeURIComponent(url)}\`);
+            const data = await response.json();
+
+            if (data.error) {
+              responseDiv.innerHTML = '<p style="color: red;">Error: ' + data.message + '</p>';
+              return;
+            }
+
+            // 아티클 카드 형식으로 표시
+            let html = '<div class="article-card">';
+            html += '<h4>' + (data.title || 'N/A') + '</h4>';
+            html += '<div class="meta">언론사: ' + (data.provider || 'N/A') + '</div>';
+            html += '<div class="meta">발행일: ' + (data.published_at || 'N/A') + '</div>';
+            html += '<div class="meta">Article ID: ' + data.article_id + ' | Office ID: ' + data.office_id + '</div>';
+
+            if (data.images && data.images.length > 0) {
+              html += '<div class="images">';
+              html += '<strong>이미지 (' + data.images.length + '개):</strong><br>';
+              data.images.forEach(img => {
+                html += '<img src="' + img + '" alt="기사 이미지">';
+              });
+              html += '</div>';
+            }
+
+            html += '<div class="content"><strong>본문:</strong><br>' + (data.content || 'N/A') + '</div>';
+            html += '</div>';
+
+            html += '<h3>Raw JSON:</h3><pre>' + JSON.stringify(data, null, 2) + '</pre>';
+
+            responseDiv.innerHTML = html;
           } catch (error) {
             responseDiv.innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
           }
@@ -199,6 +289,29 @@ app.get('/api/crawl', async (req, res) => {
   } catch (error) {
     res.status(500).json({
       error: 'Crawling failed',
+      message: error.message,
+      details: error.response?.data || null
+    });
+  }
+});
+
+// 크롤링 엔드포인트 - 네이버 금융 뉴스 상세
+app.get('/api/crawl/detail', async (req, res) => {
+  try {
+    const { url } = req.query;
+
+    if (!url) {
+      return res.status(400).json({
+        error: 'URL parameter is required'
+      });
+    }
+
+    const result = await crawlNaverFinanceNewsDetail(url);
+
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({
+      error: 'Crawling detail failed',
       message: error.message,
       details: error.response?.data || null
     });

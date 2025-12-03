@@ -4,18 +4,26 @@ import iconv from 'iconv-lite';
 
 /**
  * 날짜 문자열을 파싱하여 ISO 형식으로 변환
- * @param {string} dateStr - "2025.12.01 19:39" 형식의 날짜 문자열
+ * @param {string} dateStr - "2025.12.01 19:39" 또는 "2025-12-01 19:39:15" 형식의 날짜 문자열
  * @returns {string|null} ISO 형식의 날짜 문자열 또는 null
  */
 function parsePublishedDate(dateStr) {
   if (!dateStr) return null;
 
+  // 형식 1: "2025-12-01 19:39:15" (이미 표준 형식)
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(dateStr)) {
+    return dateStr;
+  }
+
+  // 형식 2: "2025.12.01 19:39"
   const dateParts = dateStr.match(
     /(\d{4})\.(\d{2})\.(\d{2})\s+(\d{2}):(\d{2})/
   );
-  if (!dateParts) return null;
+  if (dateParts) {
+    return `${dateParts[1]}-${dateParts[2]}-${dateParts[3]} ${dateParts[4]}:${dateParts[5]}:00`;
+  }
 
-  return `${dateParts[1]}-${dateParts[2]}-${dateParts[3]} ${dateParts[4]}:${dateParts[5]}:00`;
+  return null;
 }
 
 /**
@@ -209,6 +217,97 @@ export async function crawlNaverFinanceNews({
     totalCrawled: articles.length,
     articles,
     sourceUrl: newsListUrl,
+    crawledAt: new Date().toISOString()
+  };
+}
+
+/**
+ * 네이버 금융 뉴스 상세 페이지를 크롤링
+ * @param {string} originUrl - 기사 원문 URL
+ * @returns {Promise<Object>} 크롤링 결과
+ */
+export async function crawlNaverFinanceNewsDetail(originUrl) {
+  if (!originUrl || originUrl.trim() === '') {
+    throw new Error('Origin URL is required');
+  }
+
+  // URL에서 article_id, office_id 추출
+  const ids = extractArticleIds(originUrl);
+  if (!ids) {
+    throw new Error('Unable to extract article_id and office_id from URL');
+  }
+
+  // 네이버 뉴스 직접 URL로 변환 (리다이렉트 없이 직접 접근)
+  const directNewsUrl = `https://n.news.naver.com/mnews/article/${ids.officeId}/${ids.articleId}`;
+
+  const response = await axios.get(directNewsUrl, {
+    headers: {
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      Referer: 'https://finance.naver.com/'
+    }
+  });
+
+  const $ = cheerio.load(response.data);
+
+  // 제목 추출
+  const title =
+    $('h2#title_area span, h2.media_end_head_headline').text().trim() ||
+    $('.newsct_article h2').text().trim();
+
+  // 언론사명 추출
+  const provider =
+    $('img.media_end_head_top_logo_img').attr('alt')?.trim() ||
+    $('.media_end_head_top_logo img').attr('alt')?.trim() ||
+    $('.press_logo img').attr('alt')?.trim();
+
+  // 날짜 추출
+  const dateStr =
+    $('.media_end_head_info_datestamp_time').attr('data-date-time')?.trim() ||
+    $('.media_end_head_info time').text().trim() ||
+    $('.article_info .t11').text().trim();
+  const publishedAt = parsePublishedDate(dateStr);
+
+  // 기사 본문 추출
+  let content = '';
+  const $newsContent = $('#dic_area, article#dic_area, #articeBody');
+  if ($newsContent.length > 0) {
+    // 본문 내용만 추출 (광고, 스크립트 등 제외)
+    $newsContent.find('script, style, .ad, .aside, .link_news').remove();
+    content = $newsContent.text().trim();
+    // 여러 줄바꿈을 하나로 정리
+    content = content.replace(/\n\s*\n/g, '\n');
+  }
+
+  // 기사 이미지 추출
+  const images = [];
+  $('#dic_area img, #articeBody img, .article_body img').each(
+    (index, element) => {
+      const imgSrc = $(element).attr('src') || $(element).attr('data-src');
+      if (
+        imgSrc &&
+        !imgSrc.includes('blank.gif') &&
+        !imgSrc.includes('logo') &&
+        !imgSrc.includes('icon')
+      ) {
+        const absoluteUrl = imgSrc.startsWith('http')
+          ? imgSrc
+          : `https:${imgSrc}`;
+        images.push(absoluteUrl);
+      }
+    }
+  );
+
+  return {
+    article_id: ids.articleId,
+    office_id: ids.officeId,
+    title,
+    provider,
+    published_at: publishedAt,
+    content,
+    images,
+    origin_url: originUrl,
+    actual_url: directNewsUrl,
     crawledAt: new Date().toISOString()
   };
 }
