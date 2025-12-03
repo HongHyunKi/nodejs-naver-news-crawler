@@ -1,5 +1,4 @@
 import express from 'express';
-import axios from 'axios';
 import dotenv from 'dotenv';
 import {
   crawlNaverFinanceNews,
@@ -233,44 +232,41 @@ app.get('/api/search', async (req, res) => {
       });
     }
 
-    const response = await axios.get(NAVER_NEWS_API_URL, {
-      params: { query, display, start, sort },
+    const url = new URL(NAVER_NEWS_API_URL);
+    url.searchParams.append('query', query);
+    url.searchParams.append('display', display);
+    url.searchParams.append('start', start);
+    url.searchParams.append('sort', sort);
+
+    const response = await fetch(url, {
       headers: {
         'X-Naver-Client-Id': NAVER_CLIENT_ID,
         'X-Naver-Client-Secret': NAVER_CLIENT_SECRET
       }
     });
 
-    // 브라우저에서 보기 편하게 전체 response 객체를 반환
-    res.json({
-      axiosResponse: {
-        status: response.status,
-        statusText: response.statusText,
-        headers: response.headers,
-        config: {
-          url: response.config.url,
-          method: response.config.method,
-          params: response.config.params,
-          headers: response.config.headers
-        }
-      },
-      data: response.data
-    });
-  } catch (error) {
-    if (error.response) {
-      res.status(error.response.status).json({
-        error: `API Error: ${error.response.status} - ${error.response.statusText}`,
-        details: error.response.data
-      });
-    } else if (error.request) {
-      res.status(500).json({
-        error: 'Network error: No response from server'
-      });
-    } else {
-      res.status(500).json({
-        error: error.message
+    const data = await response.json();
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        error: `API Error: ${response.status} - ${response.statusText}`,
+        details: data
       });
     }
+
+    // 브라우저에서 보기 편하게 전체 response 객체를 반환
+    res.json({
+      fetchResponse: {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries())
+      },
+      data: data
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: error.message
+    });
   }
 });
 

@@ -1,4 +1,3 @@
-import axios from 'axios';
 import * as cheerio from 'cheerio';
 import iconv from 'iconv-lite';
 
@@ -179,17 +178,17 @@ export async function crawlNaverFinanceNews({
   // 네이버 금융 종목 뉴스 리스트 URL
   const newsListUrl = `https://finance.naver.com/item/news_news.naver?code=${stockCode}&page=${page}&sm=title_entity_id.basic&clusterId=`;
 
-  const response = await axios.get(newsListUrl, {
+  const response = await fetch(newsListUrl, {
     headers: {
       'User-Agent':
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       Referer: `https://finance.naver.com/item/news.naver?code=${stockCode}`
-    },
-    responseType: 'arraybuffer'
+    }
   });
 
-  // EUC-KR을 UTF-8로 변환
-  const decodedData = iconv.decode(response.data, 'EUC-KR');
+  // ArrayBuffer로 받아서 EUC-KR을 UTF-8로 변환
+  const arrayBuffer = await response.arrayBuffer();
+  const decodedData = iconv.decode(Buffer.from(arrayBuffer), 'EUC-KR');
   const $ = cheerio.load(decodedData);
   const articles = [];
 
@@ -240,7 +239,7 @@ export async function crawlNaverFinanceNewsDetail(originUrl) {
   // 네이버 뉴스 직접 URL로 변환 (리다이렉트 없이 직접 접근)
   const directNewsUrl = `https://n.news.naver.com/mnews/article/${ids.officeId}/${ids.articleId}`;
 
-  const response = await axios.get(directNewsUrl, {
+  const response = await fetch(directNewsUrl, {
     headers: {
       'User-Agent':
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -248,7 +247,8 @@ export async function crawlNaverFinanceNewsDetail(originUrl) {
     }
   });
 
-  const $ = cheerio.load(response.data);
+  const html = await response.text();
+  const $ = cheerio.load(html);
 
   // 제목 추출
   const title =

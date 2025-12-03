@@ -1,4 +1,3 @@
-import axios from 'axios';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -27,27 +26,36 @@ async function searchNaverNews(query, display = 10, start = 1, sort = 'sim') {
       throw new Error('Search query is required.');
     }
 
-    const response = await axios.get(NAVER_NEWS_API_URL, {
-      params: {
-        query: query,
-        display: display,
-        start: start,
-        sort: sort
-      },
+    const url = new URL(NAVER_NEWS_API_URL);
+    url.searchParams.append('query', query);
+    url.searchParams.append('display', display);
+    url.searchParams.append('start', start);
+    url.searchParams.append('sort', sort);
+
+    const response = await fetch(url, {
       headers: {
         'X-Naver-Client-Id': NAVER_CLIENT_ID,
         'X-Naver-Client-Secret': NAVER_CLIENT_SECRET
       }
     });
 
-    console.log('response', response);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      return {
+        success: false,
+        error: `API Error: ${response.status} - ${response.statusText}`,
+        details: errorData
+      };
+    }
+
+    const data = await response.json();
 
     return {
       success: true,
-      total: response.data.total,
-      start: response.data.start,
-      display: response.data.display,
-      items: response.data.items.map((item) => ({
+      total: data.total,
+      start: data.start,
+      display: data.display,
+      items: data.items.map((item) => ({
         title: item.title.replace(/<[^>]*>/g, ''),
         originalLink: item.originallink,
         link: item.link,
@@ -56,23 +64,10 @@ async function searchNaverNews(query, display = 10, start = 1, sort = 'sim') {
       }))
     };
   } catch (error) {
-    if (error.response) {
-      return {
-        success: false,
-        error: `API Error: ${error.response.status} - ${error.response.statusText}`,
-        details: error.response.data
-      };
-    } else if (error.request) {
-      return {
-        success: false,
-        error: 'Network error: No response from server'
-      };
-    } else {
-      return {
-        success: false,
-        error: error.message
-      };
-    }
+    return {
+      success: false,
+      error: error.message
+    };
   }
 }
 
