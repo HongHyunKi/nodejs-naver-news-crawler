@@ -9,7 +9,8 @@
     "debug": "node --inspect index.js",
     "server": "node server.js",
     "server:dev": "nodemon server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node test-crawler.js",
+    "test:debug": "node debug-crawler.js"
   },
   "type": "module",
   "keywords": [],

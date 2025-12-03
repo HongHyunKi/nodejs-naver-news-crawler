@@ -31,6 +31,34 @@ function extractUrlParam(url, paramName) {
 }
 
 /**
+ * URL에서 article_id와 office_id 추출 (두 가지 형식 지원)
+ * @param {string} url - URL 문자열
+ * @returns {Object|null} {articleId, officeId} 또는 null
+ */
+function extractArticleIds(url) {
+  if (!url) return null;
+
+  // 형식 1: 파라미터 방식 (finance.naver.com/item/news_read.naver?article_id=...&office_id=...)
+  let articleId = extractUrlParam(url, 'article_id');
+  let officeId = extractUrlParam(url, 'office_id');
+
+  if (articleId && officeId) {
+    return { articleId, officeId };
+  }
+
+  // 형식 2: 경로 방식 (n.news.naver.com/mnews/article/{office_id}/{article_id})
+  const pathMatch = url.match(/\/article\/(\d+)\/(\d+)/);
+  if (pathMatch) {
+    return {
+      officeId: pathMatch[1],
+      articleId: pathMatch[2]
+    };
+  }
+
+  return null;
+}
+
+/**
  * 연관기사 그룹에서 cluster ID 추출
  * @param {cheerio.Cheerio} $row - 행 요소
  * @returns {string|null} cluster ID 또는 null
@@ -63,11 +91,12 @@ function parseArticleRow($row, stockCode) {
 
   if (!title || !link) return null;
 
-  // URL에서 article_id, office_id 추출
-  const articleId = extractUrlParam(link, 'article_id');
-  const officeId = extractUrlParam(link, 'office_id');
+  // URL에서 article_id, office_id 추출 (두 가지 형식 지원)
+  const ids = extractArticleIds(link);
 
-  if (!articleId || !officeId) return null;
+  if (!ids) return null;
+
+  const { articleId, officeId } = ids;
 
   // URL에서 cluster_id 직접 추출
   let clusterId = extractUrlParam(link, 'clusterId');
@@ -77,9 +106,19 @@ function parseArticleRow($row, stockCode) {
   const isRelationLst = $row.hasClass('relation_lst');
   const isRelationHead = isRelationTit || isRelationLst;
 
-  // 연관기사 더보기 링크에서 clusterId 추출 (대표 기사인 경우)
-  if (!clusterId && isRelationTit) {
-    clusterId = extractClusterId($row);
+  // cluster_id 추출 시도
+  if (!clusterId) {
+    // 1. relation_lst 클래스명에서 _clusterId 추출
+    const rowClass = $row.attr('class') || '';
+    const clusterIdMatch = rowClass.match(/_clusterId(\d+)/);
+    if (clusterIdMatch) {
+      clusterId = clusterIdMatch[1];
+    }
+
+    // 2. relation_tit인 경우 더보기 링크에서 추출
+    if (!clusterId && isRelationTit) {
+      clusterId = extractClusterId($row);
+    }
   }
 
   // 언론사명
@@ -89,8 +128,10 @@ function parseArticleRow($row, stockCode) {
   const dateStr = $row.find('.date').text().trim();
   const publishedAt = parsePublishedDate(dateStr);
 
-  // 원문 링크 구성
-  const originUrl = `https://finance.naver.com${link}`;
+  // 원문 링크 구성 (절대 경로인 경우 그대로 사용, 상대 경로인 경우 도메인 추가)
+  const originUrl = link.startsWith('http')
+    ? link
+    : `https://finance.naver.com${link}`;
 
   return {
     stock_code: stockCode,
@@ -144,11 +185,15 @@ export async function crawlNaverFinanceNews({
   const $ = cheerio.load(decodedData);
   const articles = [];
 
-  // 뉴스 기사 파싱
-  $('.type5 tbody tr').each((index, element) => {
+  // 뉴스 기사 파싱 (중첩된 테이블의 tr 제외, 최상위 레벨만 선택)
+  $('.type5 > tbody > tr').each((index, element) => {
     if (articles.length >= validDisplay) return false;
 
     const $row = $(element);
+
+    // relation_lst는 연관기사 컨테이너이므로 건너뜀
+    if ($row.hasClass('relation_lst')) return true;
+
     const article = parseArticleRow($row, stockCode);
 
     if (article) {
