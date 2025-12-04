@@ -50,9 +50,9 @@ node server.js
 
 **CLI로 테스트**
 ```bash
-npm start              # 네이버 뉴스 API 테스트
-node test-crawler.js   # 금융 뉴스 목록 크롤링 테스트
-node test-detail-crawler.js  # 뉴스 상세 크롤링 테스트
+npm start                        # 네이버 뉴스 API 테스트
+npm test                         # 금융 뉴스 목록 크롤링 테스트
+node test/test-detail-crawler.js # 뉴스 상세 크롤링 테스트
 ```
 
 ## API 사용법
@@ -114,8 +114,17 @@ GET /api/crawl/detail?url={뉴스URL}
 ├── server.js                   # Express 웹 서버
 ├── utils/
 │   └── newsCrawler.js          # 크롤링 유틸리티
-├── test-crawler.js             # 목록 크롤링 테스트
-└── test-detail-crawler.js      # 상세 크롤링 테스트
+└── test/                       # 테스트 및 디버그 파일
+    ├── test-crawler.js         # 뉴스 리스트 크롤러 테스트
+    ├── test-detail-crawler.js  # 뉴스 상세 크롤러 테스트
+    ├── test-full-crawl.js      # 전체 크롤링 워크플로우 테스트
+    ├── test-cluster-ids.js     # 클러스터 ID 추출 테스트
+    ├── debug-crawler.js        # 디버그 버전 크롤러
+    ├── debug-html.js           # HTML 구조 디버깅
+    ├── final-test.js           # 최종 통합 테스트
+    ├── verify-fix.js           # 검증 스크립트
+    ├── analyze-structure.js    # HTML 구조 분석기
+    └── analyze-difference.js   # 차이점 분석기
 ```
 
 ## 주의사항

@@ -38,10 +38,15 @@ npm start
 npm run dev
 
 # Test news list crawler
-node test-crawler.js
+npm test
+# or: node test/test-crawler.js
 
 # Test news detail crawler
-node test-detail-crawler.js
+node test/test-detail-crawler.js
+
+# Debug crawler
+npm run test:debug
+# or: node test/debug-crawler.js
 
 # Format code with Prettier
 npx prettier --write .
@@ -57,8 +62,17 @@ npx prettier --write .
 ├── server.js                   # Express web server with test UI
 ├── utils/
 │   └── newsCrawler.js          # News crawling utilities
-├── test-crawler.js             # Test for news list crawler
-└── test-detail-crawler.js      # Test for news detail crawler
+└── test/                       # Test and debugging files
+    ├── test-crawler.js         # Test for news list crawler
+    ├── test-detail-crawler.js  # Test for news detail crawler
+    ├── test-full-crawl.js      # Test for full crawling workflow
+    ├── test-cluster-ids.js     # Test for cluster ID extraction
+    ├── debug-crawler.js        # Debug version of crawler
+    ├── debug-html.js           # HTML structure debugging
+    ├── final-test.js           # Final integration test
+    ├── verify-fix.js           # Verification script
+    ├── analyze-structure.js    # HTML structure analyzer
+    └── analyze-difference.js   # Difference analyzer
 ```
 
 ### Core Components

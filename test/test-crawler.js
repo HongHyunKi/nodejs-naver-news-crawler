@@ -1,4 +1,4 @@
-import { crawlNaverFinanceNews } from './utils/newsCrawler.js';
+import { crawlNaverFinanceNews } from '../utils/newsCrawler.js';
 
 async function test() {
   console.log('=== Testing Naver Finance News Crawler ===\n');
