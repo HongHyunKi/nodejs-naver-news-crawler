@@ -71,13 +71,15 @@ function extractArticleIds(url) {
  * @returns {string|null} cluster ID 또는 null
  */
 function extractClusterId($row) {
-  const $moreLink = $row.find('a.r_lnk');
-  if ($moreLink.length === 0) return null;
+  const classAttr = $row.attr('class');
+  if (!classAttr) return null;
 
-  const moreLinkHref = $moreLink.attr('href');
-  if (!moreLinkHref) return null;
+  // 예: "relation_lst _clusterId2150001233359"
+  // 패턴: _clusterId{officeId}{articleId}
+  const match = classAttr.match(/_clusterId(\d+)/);
+  if (!match) return null;
 
-  return extractUrlParam(moreLinkHref, 'clusterId');
+  return match[1];
 }
 
 /**
@@ -113,19 +115,10 @@ function parseArticleRow($row, stockCode) {
   const isRelationLst = $row.hasClass('relation_lst');
   const isRelationHead = isRelationTit || isRelationLst;
 
-  // cluster_id 추출 시도
-  if (!clusterId) {
-    // 1. relation_lst 클래스명에서 _clusterId 추출
-    const rowClass = $row.attr('class') || '';
-    const clusterIdMatch = rowClass.match(/_clusterId(\d+)/);
-    if (clusterIdMatch) {
-      clusterId = clusterIdMatch[1];
-    }
-
-    // 2. relation_tit인 경우 더보기 링크에서 추출
-    if (!clusterId && isRelationTit) {
-      clusterId = extractClusterId($row);
-    }
+  // relation_tit은 cluster_id를 가지지 않음 (연관기사 그룹의 대표 기사)
+  // cluster_id는 오직 relation_lst 내부의 연관기사들만 가짐
+  if (isRelationTit) {
+    clusterId = null;
   }
 
   // 언론사명
@@ -192,14 +185,35 @@ export async function crawlNaverFinanceNews({
   const $ = cheerio.load(decodedData);
   const articles = [];
 
-  // 뉴스 기사 파싱 (중첩된 테이블의 tr 제외, 최상위 레벨만 선택)
-  $('.type5 > tbody > tr').each((index, element) => {
+  // 뉴스 기사 파싱 (최상위 레벨의 tr만 선택, 중첩 테이블 제외)
+  const $mainTable = $('.tb_cont > .type5').first();
+  $mainTable.find('> tbody > tr').each((index, element) => {
     if (articles.length >= validDisplay) return false;
 
     const $row = $(element);
 
-    // relation_lst는 연관기사 컨테이너이므로 건너뜀
-    if ($row.hasClass('relation_lst')) return true;
+    // relation_lst는 연관기사 컨테이너 - 내부 기사 파싱 필요
+    if ($row.hasClass('relation_lst')) {
+      // relation_lst의 클래스에서 cluster_id 추출
+      const clusterId = extractClusterId($row);
+
+      // 중첩된 테이블의 기사들 파싱
+      $row.find('table.type5 > tbody > tr').each((idx, nestedElement) => {
+        if (articles.length >= validDisplay) return false;
+
+        const $nestedRow = $(nestedElement);
+        const nestedArticle = parseArticleRow($nestedRow, stockCode);
+
+        if (nestedArticle) {
+          // 연관기사에 cluster_id 설정
+          nestedArticle.cluster_id = clusterId;
+          nestedArticle.is_relation_head = false; // 연관기사는 head가 아님
+          articles.push(nestedArticle);
+        }
+      });
+
+      return true;
+    }
 
     const article = parseArticleRow($row, stockCode);
 
